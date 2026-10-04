@@ -67,10 +67,15 @@ class StartupWaitCondition:
 class HassPlugin(PluginBase):
     config: HASSConfig
     id: int
-    session: aiohttp.ClientSession
-    """http connection pool for general use"""
-    ws: aiohttp.ClientWebSocketResponse
-    """websocket dedicated for event loop"""
+    session: aiohttp.ClientSession | None
+    """http connection pool for general use.
+
+    Only assigned inside :py:meth:`~HassPlugin.websocket_msg_factory`, so it is ``None`` until a
+    websocket connect succeeds, notably for a plugin whose Home Assistant instance was never
+    reachable. Methods may rely on it being set whenever a connection has been established.
+    """
+    ws: aiohttp.ClientWebSocketResponse | None
+    """websocket dedicated for event loop, ``None`` until a websocket connect succeeds"""
     metadata: dict[str, Any]
     services: dict[
         str,  # Domain
@@ -108,15 +113,22 @@ class HassPlugin(PluginBase):
         self.startup_conditions = []
         self.maintenance_tasks = []
 
+        # Sentinels: ws and session are only assigned by websocket_msg_factory() after a successful
+        # websocket connect, so stop() must tolerate a plugin that never connected (e.g. Home
+        # Assistant was unreachable at boot)
+        self.ws = None
+        self.session = None
+
         self.service_logger = self.diag.getChild("services")
         self.logger.info("HASS Plugin initialization complete")
 
     async def stop(self):
-        await self.ws.close()
-        self.logger.debug("Websocket closed for '%s'", self.name)
-
-        await self.session.close()
-        self.logger.debug("aiohttp session closed for '%s'", self.name)
+        if self.ws is not None:
+            await self.ws.close()
+            self.logger.debug("Websocket closed for '%s'", self.name)
+        if self.session is not None:
+            await self.session.close()
+            self.logger.debug("aiohttp session closed for '%s'", self.name)
 
     def _create_maintenance_task(self, coro: Coroutine, name: str) -> asyncio.Task:
         task = self.AD.loop.create_task(coro, name=name)
