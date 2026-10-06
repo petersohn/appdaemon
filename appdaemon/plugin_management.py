@@ -332,17 +332,6 @@ class PluginManagement:
 
     def _register_plugin(self, name: str, plugin: PluginBase, namespace: str) -> None:
         """Records an instantiated plugin in ``plugin_objs`` and seeds its state-refresh timestamp.
-
-        The ``active`` flag tracks plugin failure at runtime only: it starts True and is flipped by
-        ``notify_plugin_stopped``/``notify_plugin_started``. A plugin that has never connected does
-        NOT count as inactive — its un-readiness blocks app loading via ``wait_for_plugins``, which
-        waits on ready events that ``notify_plugin_started`` sets. Never-connected plugin failure
-        does not call ``notify_plugin_stopped``, so the flag stays True and the guard in
-        ``app_management.check_app_updates`` stays off at boot.
-
-        The ``last_plugin_state`` entry is seeded so ``time_since_plugin_update`` cannot hit a
-        KeyError in the window between registration and ``notify_plugin_started`` (a plugin whose
-        ready event is set but whose start notification hasn't completed is already "active").
         """
         self.plugin_objs[namespace] = {"object": plugin, "active": True, "name": name}
         # Seed the refresh timestamp directly instead of via sched.get_now_sync(), which is
@@ -391,8 +380,6 @@ class PluginManagement:
                         else:
                             stop_func()
                     except Exception:
-                        # A misbehaving plugin must not abort the shutdown sequence for the other
-                        # plugins; their callbacks/futures still get cleaned up below
                         self.logger.warning("-" * 60)
                         self.logger.warning("Error stopping plugin: %s - continuing shutdown", name)
                         self.logger.warning("-" * 60)

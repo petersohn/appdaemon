@@ -90,8 +90,7 @@ class AppManagement:
         self.diag = ad.logging.get_diag()
         self.filter_files = {}
         self.objects = {}
-        # Namespace -> apps that were stopped when the plugin failed. Used by _start_plugin_apps
-        # to restore them, since their ManagedObjects are deleted and no longer carry the namespace
+        # Namespace -> apps that were stopped when the plugin failed.
         self.stopped_plugin_apps: dict[str, set[str]] = {}
 
         # Add Path for adbase
@@ -793,11 +792,6 @@ class AppManagement:
             self.dependency_manager.app_deps.refresh_dep_graph()
 
         if self.AD.plugins.any_plugin_inactive():
-            # Don't auto-restart apps while a plugin is down - they'll be started
-            # again when the plugin reconnects (PLUGIN_RESTART)
-            # Scope: this guard covers only the repopulation of apps that aren't in self.objects.
-            # Loads initiated by an explicit config-file change (init/reload adds above) are NOT
-            # guarded — an explicit user action during a plugin outage is honored.
             self.logger.debug("Skipping init repopulation because a plugin is inactive")
         else:
             update_actions.apps.init |= {
@@ -1193,8 +1187,6 @@ class AppManagement:
         if plugin_ns is not None:
             self.logger.info(f"Stopping apps from namespace '{plugin_ns}' because the plugin failed")
             app_names = self.get_namespace_apps(plugin_ns)
-            # Snapshot the app names before they're stopped and their ManagedObjects deleted, so
-            # _start_plugin_apps can restore them when the plugin comes back
             snapshot = self.stopped_plugin_apps.setdefault(plugin_ns, set())
             snapshot |= app_names
             deps = self.dependency_manager.app_deps.get_dependents(app_names)

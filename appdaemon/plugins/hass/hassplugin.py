@@ -68,12 +68,7 @@ class HassPlugin(PluginBase):
     config: HASSConfig
     id: int
     session: aiohttp.ClientSession | None
-    """http connection pool for general use.
-
-    Only assigned inside :py:meth:`~HassPlugin.websocket_msg_factory`, so it is ``None`` until a
-    websocket connect succeeds, notably for a plugin whose Home Assistant instance was never
-    reachable. Methods may rely on it being set whenever a connection has been established.
-    """
+    """http connection pool for general use, ``None`` until a websocket connect succeeds."""
     ws: aiohttp.ClientWebSocketResponse | None
     """websocket dedicated for event loop, ``None`` until a websocket connect succeeds"""
     metadata: dict[str, Any]
@@ -113,9 +108,6 @@ class HassPlugin(PluginBase):
         self.startup_conditions = []
         self.maintenance_tasks = []
 
-        # Sentinels: ws and session are only assigned by websocket_msg_factory() after a successful
-        # websocket connect, so stop() must tolerate a plugin that never connected (e.g. Home
-        # Assistant was unreachable at boot)
         self.ws = None
         self.session = None
 
